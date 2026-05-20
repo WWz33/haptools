@@ -2,6 +2,7 @@
 #include <optional>
 #include <stdexcept>
 #include <fstream>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -21,16 +22,28 @@ struct ParsedViewJsonCommand {
 };
 
 double parse_max_diff(const std::string& value) {
-    const double parsed = std::stod(value);
-    if (parsed < 0.0 || parsed > 1.0) {
+    std::size_t consumed = 0;
+    double parsed = 0.0;
+    try {
+        parsed = std::stod(value, &consumed);
+    } catch (const std::exception&) {
+        throw std::runtime_error("max diff must be a finite number in [0,1]");
+    }
+    if (consumed != value.size() || !std::isfinite(parsed) || parsed < 0.0 || parsed > 1.0) {
         throw std::runtime_error("max diff must be in [0,1]");
     }
     return parsed;
 }
 
 int parse_hap_pad(const std::string& value) {
-    const int parsed = std::stoi(value);
-    if (parsed < 1) {
+    std::size_t consumed = 0;
+    int parsed = 0;
+    try {
+        parsed = std::stoi(value, &consumed);
+    } catch (const std::exception&) {
+        throw std::runtime_error("hap pad must be a positive integer");
+    }
+    if (consumed != value.size() || parsed < 1) {
         throw std::runtime_error("hap pad must be a positive integer");
     }
     return parsed;
