@@ -27,7 +27,9 @@ test_output/
 renv/
 
 # Local tool configs
+.ccg/
 .omc/
+.omx/
 .claude/
 
 # IDE
@@ -51,3 +53,4 @@ docs/
 # Research / scratch
 hap_network/
 tmp_demo/
+repo/
