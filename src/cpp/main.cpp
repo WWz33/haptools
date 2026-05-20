@@ -333,10 +333,34 @@ int run_debug_fetch(int argc, char** argv) {
     return 0;
 }
 
+int run_resolve_gene(int argc, char** argv) {
+    if (argc < 4) {
+        throw std::runtime_error("usage: haplokit_cpp resolve-gene <gff3> <gene-id>");
+    }
+
+    haplokit::GffAnnotator annotator;
+    const std::string gff3_path = argv[2];
+    if (!annotator.load(gff3_path)) {
+        throw std::runtime_error("failed to parse GFF3: " + gff3_path);
+    }
+
+    const std::string gene_id = argv[3];
+    const auto gene = annotator.find_gene(gene_id);
+    if (!gene) {
+        throw std::runtime_error("gene ID not found in GFF3: " + gene_id);
+    }
+
+    std::cout << gene->seqid << ":" << gene->start << "-" << gene->end << "\n";
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     try {
+        if (argc >= 2 && std::string(argv[1]) == "resolve-gene") {
+            return run_resolve_gene(argc, argv);
+        }
         if (argc >= 2 && std::string(argv[1]) == "view-json") {
             return run_view_json(argc, argv);
         }

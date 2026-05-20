@@ -57,6 +57,8 @@ def test_view_rejects_r_and_r_file_together() -> None:
     parser = build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["view", "-r", "chr1:1-10", "-R", "regions.bed"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["view", "-r", "chr1:1-10", "--gene-id", "gene1", "--gff", "anno.gff"])
 
 
 def test_view_defaults_to_tsv_and_infers_region_mode_for_interval() -> None:
@@ -89,6 +91,17 @@ def test_view_accepts_gff_alias() -> None:
     args = parser.parse_args(["view", "-r", "chr1:1-10", "--gff", "anno.gff"])
 
     assert args.gff3 == "anno.gff"
+
+
+def test_view_gene_id_selector_requires_gff_and_infers_region_mode() -> None:
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["view", "--gene-id", "gene1"])
+
+    args = parser.parse_args(["view", "--gene-id", "gene1", "--gff", "anno.gff"])
+    assert args.gene_id == "gene1"
+    assert args.gff3 == "anno.gff"
+    assert args.by == "region"
 
 
 def test_view_rejects_invalid_hap_pad_values() -> None:

@@ -69,16 +69,26 @@ class HaolokitArgumentParser(argparse.ArgumentParser):
             return
         has_region = bool(ns.region)
         has_regions_file = bool(ns.regions_file)
-        if not has_region and not has_regions_file:
-            self.error("one of -r/--region or -R/--regions-file is required")
-        if has_region and has_regions_file:
-            self.error("-r/--region and -R/--regions-file are mutually exclusive")
+        has_gene_id = bool(ns.gene_id)
+        selector_count = sum([has_region, has_regions_file, has_gene_id])
+        if selector_count == 0:
+            self.error("one of -r/--region, -R/--regions-file, or --gene-id is required")
+        if selector_count > 1:
+            self.error("-r/--region, -R/--regions-file, and --gene-id are mutually exclusive")
         if has_region:
             coords = ns.region.split(":", 1)[1]
             inferred_by = "site" if "-" not in coords else "region"
             if ns.by != "auto" and ns.by != inferred_by:
                 self.error(f"--by {ns.by} conflicts with -r selector semantics ({inferred_by})")
             ns.by = inferred_by
+            return
+
+        if has_gene_id:
+            if not ns.gff3:
+                self.error("--gene-id requires --gff/--gff3")
+            if ns.by not in {"auto", "region"}:
+                self.error("--by site is only valid with -r chr:pos")
+            ns.by = "region"
             return
 
         if ns.by == "site":
@@ -94,6 +104,7 @@ def build_parser() -> HaolokitArgumentParser:
     view.add_argument("input_vcf", nargs="?", default=None)
     view.add_argument("-r", "--region", dest="region", type=_region_value)
     view.add_argument("-R", "--regions-file", dest="regions_file")
+    view.add_argument("--gene-id", dest="gene_id")
     view.add_argument("-S", "--samples-file", dest="samples_file")
     view.add_argument("--by", choices=["auto", "region", "site"], default="auto")
     view.add_argument("--impute", action="store_true")
@@ -130,6 +141,13 @@ def _selectors_from_args(args) -> list[Selector]:
     if args.region:
         payload, region = _selector_payload_from_region(args.region)
         return [Selector(payload=payload, region=region)]
+
+    if args.gene_id:
+        region = _resolve_gene_region(str(args.gff3), str(args.gene_id))
+        payload, region_label = _selector_payload_from_region(region)
+        payload["type"] = "gene"
+        payload["gene_id"] = args.gene_id
+        return [Selector(payload=payload, region=region_label)]
 
     selectors: list[Selector] = []
     for idx, line in enumerate(Path(args.regions_file).read_text(encoding="utf-8").splitlines(), start=1):
@@ -204,6 +222,15 @@ def _cpp_backend_path() -> Path:
     raise FileNotFoundError(
         "haplokit_cpp backend not found; build the C++ target first or set HAPLOKIT_CPP_BIN"
     )
+
+
+def _resolve_gene_region(gff3_path: str, gene_id: str) -> str:
+    cmd = [str(_cpp_backend_path()), "resolve-gene", gff3_path, gene_id]
+    completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    _check_backend_result(completed)
+    region = completed.stdout.strip()
+    _region_value(region)
+    return region
 
 
 def _run_cpp_view(selector: Selector, args) -> dict[str, object]:
