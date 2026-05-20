@@ -150,6 +150,34 @@ def test_gene_id_selector_accepts_window_options(tmp_path: Path, indexed_vcf: Pa
     assert row["variant_count"] > 0
 
 
+def test_gene_list_selector_expands_to_multiple_rows(tmp_path: Path, indexed_vcf: Path) -> None:
+    gene_list = tmp_path / "genes.txt"
+    gene_list.write_text("# comment\n\ntest1G0387\ntest1G0387\n", encoding="utf-8")
+    out_file = tmp_path / "genes.jsonl"
+
+    exit_code = main(
+        [
+            "view",
+            str(indexed_vcf),
+            "--gene-list",
+            str(gene_list),
+            "--gff",
+            str(DATA_DIR / "annotation.gff"),
+            "--output-format",
+            "jsonl",
+            "--output-file",
+            str(out_file),
+        ]
+    )
+
+    assert exit_code == 0
+    rows = [json.loads(line) for line in out_file.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 2
+    assert [row["selector"]["gene_id"] for row in rows] == ["test1G0387", "test1G0387"]
+    assert {row["region_label"] for row in rows} == {"scaffold_1:4300-7910"}
+    assert all(row["annotation"]["id"] == "test1G0387" for row in rows)
+
+
 def test_site_mode_with_r_chr_pos_behaves_as_one_site(tmp_path: Path, indexed_vcf: Path) -> None:
     out_dir = tmp_path / "out_site"
     exit_code = main(["view", str(indexed_vcf), "-r", "scaffold_1:4300", "--output-file", str(out_dir)])

@@ -76,13 +76,14 @@ class HaolokitArgumentParser(argparse.ArgumentParser):
         has_region = bool(ns.region)
         has_regions_file = bool(ns.regions_file)
         has_gene_id = bool(ns.gene_id)
-        selector_count = sum([has_region, has_regions_file, has_gene_id])
+        has_gene_list = bool(ns.gene_list)
+        selector_count = sum([has_region, has_regions_file, has_gene_id, has_gene_list])
         if selector_count == 0:
-            self.error("one of -r/--region, -R/--regions-file, or --gene-id is required")
+            self.error("one of -r/--region, -R/--regions-file, --gene-id, or --gene-list is required")
         if selector_count > 1:
-            self.error("-r/--region, -R/--regions-file, and --gene-id are mutually exclusive")
-        if not has_gene_id and (ns.upstream or ns.downstream or ns.strand_aware):
-            self.error("--upstream, --downstream, and --strand-aware are only valid with --gene-id")
+            self.error("-r/--region, -R/--regions-file, --gene-id, and --gene-list are mutually exclusive")
+        if not (has_gene_id or has_gene_list) and (ns.upstream or ns.downstream or ns.strand_aware):
+            self.error("--upstream, --downstream, and --strand-aware are only valid with --gene-id or --gene-list")
         if has_region:
             coords = ns.region.split(":", 1)[1]
             inferred_by = "site" if "-" not in coords else "region"
@@ -91,9 +92,9 @@ class HaolokitArgumentParser(argparse.ArgumentParser):
             ns.by = inferred_by
             return
 
-        if has_gene_id:
+        if has_gene_id or has_gene_list:
             if not ns.gff3:
-                self.error("--gene-id requires --gff/--gff3")
+                self.error("--gene-id/--gene-list requires --gff/--gff3")
             if ns.by not in {"auto", "region"}:
                 self.error("--by site is only valid with -r chr:pos")
             ns.by = "region"
@@ -113,6 +114,7 @@ def build_parser() -> HaolokitArgumentParser:
     view.add_argument("-r", "--region", dest="region", type=_region_value)
     view.add_argument("-R", "--regions-file", dest="regions_file")
     view.add_argument("--gene-id", dest="gene_id")
+    view.add_argument("--gene-list", dest="gene_list")
     view.add_argument("-S", "--samples-file", dest="samples_file")
     view.add_argument("--by", choices=["auto", "region", "site"], default="auto")
     view.add_argument("--impute", action="store_true")
@@ -154,21 +156,18 @@ def _selectors_from_args(args) -> list[Selector]:
         return [Selector(payload=payload, region=region)]
 
     if args.gene_id:
-        region = _resolve_gene_region(
-            str(args.gff3),
-            str(args.gene_id),
-            int(args.upstream),
-            int(args.downstream),
-            bool(args.strand_aware),
-        )
-        payload, region_label = _selector_payload_from_region(region)
-        payload["type"] = "gene"
-        payload["gene_id"] = args.gene_id
-        if args.upstream or args.downstream or args.strand_aware:
-            payload["upstream"] = args.upstream
-            payload["downstream"] = args.downstream
-            payload["strand_aware"] = args.strand_aware
-        return [Selector(payload=payload, region=region_label)]
+        return [_selector_from_gene_id(args, str(args.gene_id))]
+
+    if args.gene_list:
+        selectors: list[Selector] = []
+        for line in Path(args.gene_list).read_text(encoding="utf-8").splitlines():
+            gene_id = line.strip()
+            if not gene_id or gene_id.startswith("#"):
+                continue
+            selectors.append(_selector_from_gene_id(args, gene_id))
+        if not selectors:
+            raise ValueError("gene list did not contain any gene IDs")
+        return selectors
 
     selectors: list[Selector] = []
     for idx, line in enumerate(Path(args.regions_file).read_text(encoding="utf-8").splitlines(), start=1):
@@ -192,6 +191,24 @@ def _selectors_from_args(args) -> list[Selector]:
             )
         )
     return selectors
+
+
+def _selector_from_gene_id(args, gene_id: str) -> Selector:
+    region = _resolve_gene_region(
+        str(args.gff3),
+        gene_id,
+        int(args.upstream),
+        int(args.downstream),
+        bool(args.strand_aware),
+    )
+    payload, region_label = _selector_payload_from_region(region)
+    payload["type"] = "gene"
+    payload["gene_id"] = gene_id
+    if args.upstream or args.downstream or args.strand_aware:
+        payload["upstream"] = args.upstream
+        payload["downstream"] = args.downstream
+        payload["strand_aware"] = args.strand_aware
+    return Selector(payload=payload, region=region_label)
 
 
 def _write_jsonl(rows: Iterable[dict[str, object]], output_file: str | None) -> None:
