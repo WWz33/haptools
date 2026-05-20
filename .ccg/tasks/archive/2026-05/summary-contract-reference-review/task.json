@@ -1,0 +1,12 @@
+{
+  "id": "summary-contract-reference-review",
+  "title": "Review summary contract recommendations using local reference packages",
+  "status": "completed",
+  "complexity": "M",
+  "risk": "low",
+  "domain": "architecture",
+  "currentPhase": "completed",
+  "nextAction": "Archive task after recommendation review",
+  "createdAt": "2026-05-21T00:00:00+08:00",
+  "branch": "master"
+}
