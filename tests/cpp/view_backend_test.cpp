@@ -1,6 +1,7 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "gff_annotator.h"
 #include "selector.h"
 #include "vcf_reader.h"
 #include "view_backend.h"
@@ -8,6 +9,22 @@
 namespace {
 
 int run() {
+    haplokit::GffAnnotator annotator;
+    if (!annotator.load("data/annotation.gff")) {
+        std::cerr << "failed to load GFF fixture\n";
+        return 1;
+    }
+    const auto gene = annotator.find_gene("test1G0387");
+    if (!gene.has_value() || gene->mode != "gene" || gene->seqid != "scaffold_1" ||
+        gene->start != 4300 || gene->end != 7910 || gene->strand != '+') {
+        std::cerr << "expected gffsub-backed gene lookup for test1G0387\n";
+        return 1;
+    }
+    if (annotator.find_gene("missing_gene").has_value()) {
+        std::cerr << "unexpected gene lookup for missing_gene\n";
+        return 1;
+    }
+
     haplokit::VcfReader reader("data/var.sorted.vcf.gz");
 
     const auto region_data = reader.fetch(haplokit::parse_region("scaffold_1:4300-5000"));
