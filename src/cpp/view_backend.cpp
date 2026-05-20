@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iomanip>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -36,6 +37,67 @@ std::string join_states(const std::vector<std::string>& states) {
         buffer << states[idx];
     }
     return buffer.str();
+}
+
+std::vector<std::string> split_states(const std::string& value) {
+    std::vector<std::string> states;
+    std::istringstream input(value);
+    std::string token;
+    while (std::getline(input, token, '|')) {
+        states.push_back(token);
+    }
+    return states;
+}
+
+std::string hap_id(std::size_t index, const ViewOptions& options) {
+    std::ostringstream label;
+    label << options.hap_prefix << std::setw(options.hap_pad) << std::setfill('0') << index;
+    return label.str();
+}
+
+std::string state_to_label(const std::string& state, const SiteRow& site) {
+    const auto slash = state.find('/');
+    if (slash == std::string::npos) {
+        return state;
+    }
+    const auto allele_sep = site.allele.find('/');
+    if (allele_sep == std::string::npos) {
+        return state;
+    }
+    const auto allele_index = std::stoi(state.substr(0, slash));
+    if (allele_index == 0) {
+        return site.allele.substr(0, allele_sep);
+    }
+
+    const auto alt_text = site.allele.substr(allele_sep + 1);
+    std::vector<std::string> alts;
+    std::istringstream alt_input(alt_text);
+    std::string alt;
+    while (std::getline(alt_input, alt, ',')) {
+        alts.push_back(alt);
+    }
+    const auto alt_index = allele_index - 1;
+    if (alt_index >= 0 && static_cast<std::size_t>(alt_index) < alts.size()) {
+        return alts[static_cast<std::size_t>(alt_index)];
+    }
+    return state;
+}
+
+std::vector<std::string> display_states(const std::string& hap, const std::vector<SiteRow>& sites) {
+    const auto encoded_states = split_states(hap);
+    std::vector<std::string> labels;
+    labels.reserve(encoded_states.size());
+    for (std::size_t idx = 0; idx < encoded_states.size(); ++idx) {
+        if (idx < sites.size()) {
+            labels.push_back(state_to_label(encoded_states[idx], sites[idx]));
+        } else {
+            labels.push_back(encoded_states[idx]);
+        }
+    }
+    if (labels.empty() && !hap.empty()) {
+        labels.push_back(hap);
+    }
+    return labels;
 }
 
 std::vector<HaplotypeDetailRow> build_sample_profiles(const RegionData& data, bool impute_ref) {
@@ -110,16 +172,30 @@ std::vector<HaplotypeDetailRow> build_approx_accessions(
     return rows;
 }
 
-std::vector<HaplotypeSummaryRow> summarize_accessions(const std::vector<HaplotypeDetailRow>& accessions) {
+std::vector<HaplotypeSummaryRow> summarize_accessions(
+    const std::vector<HaplotypeDetailRow>& accessions,
+    const std::vector<SiteRow>& sites,
+    const ViewOptions& options,
+    int total) {
     std::map<std::string, int> counts;
+    std::map<std::string, std::vector<std::string>> samples_by_hap;
     for (const auto& accession : accessions) {
         counts[accession.hap] += 1;
+        samples_by_hap[accession.hap].push_back(accession.sample);
     }
 
     std::vector<HaplotypeSummaryRow> rows;
     rows.reserve(counts.size());
     for (const auto& entry : counts) {
-        rows.push_back(HaplotypeSummaryRow{entry.first, entry.second});
+        HaplotypeSummaryRow row;
+        row.hap = entry.first;
+        row.states = display_states(entry.first, sites);
+        row.samples = samples_by_hap[entry.first];
+        row.count = entry.second;
+        row.total = total;
+        row.frequency = total > 0 ? static_cast<double>(entry.second) / static_cast<double>(total) : 0.0;
+        row.frequency_label = std::to_string(entry.second) + "/" + std::to_string(total);
+        rows.push_back(row);
     }
     std::sort(rows.begin(), rows.end(), [](const auto& left, const auto& right) {
         if (left.count != right.count) {
@@ -127,6 +203,9 @@ std::vector<HaplotypeSummaryRow> summarize_accessions(const std::vector<Haplotyp
         }
         return left.hap < right.hap;
     });
+    for (std::size_t idx = 0; idx < rows.size(); ++idx) {
+        rows[idx].id = hap_id(idx + 1, options);
+    }
     return rows;
 }
 
@@ -143,6 +222,8 @@ ViewResult build_view_result(const RegionData& data, const ViewOptions& options)
         : options.output_mode == OutputMode::Summary ? "summary" : "detail";
     result.imputed_ref = options.impute;
     result.max_diff = options.max_diff;
+    result.hap_prefix = options.hap_prefix;
+    result.hap_pad = options.hap_pad;
     result.variant_count = static_cast<int>(data.variants.size());
     result.sample_count = static_cast<int>(data.samples.size());
     result.sites.reserve(data.variants.size());
@@ -167,7 +248,7 @@ ViewResult build_view_result(const RegionData& data, const ViewOptions& options)
         }
     }
 
-    const auto summary = summarize_accessions(accessions);
+    const auto summary = summarize_accessions(accessions, result.sites, options, result.sample_count);
     result.haplotype_count = static_cast<int>(summary.size());
 
     // Always populate both fields for Both mode; otherwise per output_mode
@@ -193,6 +274,7 @@ std::string serialize_view_result_json(const ViewResult& result) {
     j["output_mode"] = result.output_mode;
     j["sample_count"] = result.sample_count;
     j["variant_count"] = result.variant_count;
+    j["haplotype_label"] = {{"prefix", result.hap_prefix}, {"pad", result.hap_pad}};
 
     json sites = json::array();
     for (const auto& site : result.sites) {
@@ -203,7 +285,17 @@ std::string serialize_view_result_json(const ViewResult& result) {
     if (result.output_mode == "summary" || result.output_mode == "both") {
         json haps = json::array();
         for (const auto& h : result.haplotypes) {
-            haps.push_back({{"count", h.count}, {"hap", h.hap}});
+            haps.push_back({
+                {"count", h.count},
+                {"frequency", h.frequency},
+                {"frequency_label", h.frequency_label},
+                {"hap", h.hap},
+                {"id", h.id},
+                {"pattern", h.hap},
+                {"samples", h.samples},
+                {"states", h.states},
+                {"total", h.total},
+            });
         }
         j["haplotypes"] = haps;
     }

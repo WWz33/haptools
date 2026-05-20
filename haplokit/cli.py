@@ -35,6 +35,16 @@ def _max_diff_value(value: str) -> float:
     return parsed
 
 
+def _hap_pad_value(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("hap pad must be a positive integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("hap pad must be a positive integer")
+    return parsed
+
+
 @dataclass(frozen=True)
 class Selector:
     payload: dict[str, object]
@@ -91,6 +101,8 @@ def build_parser() -> HaolokitArgumentParser:
     view.add_argument("--geo", dest="geo_file")
     view.add_argument("--network", action="store_true")
     view.add_argument("--network-method", choices=["tcs", "msn", "mjn"], default="tcs")
+    view.add_argument("--hap-prefix", default="Hap")
+    view.add_argument("--hap-pad", type=_hap_pad_value, default=2)
 
     return parser
 
@@ -200,6 +212,8 @@ def _append_common_args(cmd: list[str], args) -> None:
         cmd.extend(["--max-diff", str(args.max_diff)])
     if args.gff3:
         cmd.extend(["--gff3", str(args.gff3)])
+    cmd.extend(["--hap-prefix", str(args.hap_prefix)])
+    cmd.extend(["--hap-pad", str(args.hap_pad)])
 
 
 def _check_backend_result(completed: subprocess.CompletedProcess) -> None:
@@ -346,7 +360,7 @@ def _state_to_label(state: str, allele: str) -> str:
 def _build_hap_label_map(summary_row: dict[str, object]) -> dict[str, str]:
     mapping: dict[str, str] = {}
     for index, item in enumerate(summary_row.get("haplotypes", []), start=1):
-        mapping[item["hap"]] = f"H{index:03d}"
+        mapping[item["hap"]] = str(item.get("id", f"Hap{index:02d}"))
     return mapping
 
 
@@ -370,6 +384,66 @@ def _hap_states(hap_value: str, sites: list[dict[str, object]], grouping_method:
     return [hap_value]
 
 
+def _hap_summary_states(item: dict[str, object], sites: list[dict[str, object]], grouping_method: str) -> list[str]:
+    states = item.get("states")
+    if isinstance(states, list):
+        return [str(state) for state in states]
+    return _hap_states(str(item["hap"]), sites, grouping_method)
+
+
+def _hap_samples(item: dict[str, object], detail_row: dict[str, object]) -> list[str]:
+    samples = item.get("samples")
+    if isinstance(samples, list):
+        return [str(sample) for sample in samples]
+    return [
+        str(accession["sample"])
+        for accession in detail_row.get("accessions", [])
+        if accession.get("hap") == item.get("hap")
+    ]
+
+
+def _read_popgroup_file(path: str | None) -> dict[str, str]:
+    if not path:
+        return {}
+    pop: dict[str, str] = {}
+    with Path(path).open("r", encoding="utf-8") as handle:
+        for line in handle:
+            fields = line.rstrip("\n\r").split("\t")
+            if len(fields) >= 2 and fields[0].strip():
+                pop[fields[0].strip()] = fields[1].strip()
+    return pop
+
+
+def _with_population_breakdown(haplotypes: list[dict[str, object]], population_file: str | None) -> list[dict[str, object]]:
+    pop_map = _read_popgroup_file(population_file)
+    if not pop_map:
+        return haplotypes
+    population_totals: dict[str, int] = {}
+    for population in pop_map.values():
+        population_totals[population] = population_totals.get(population, 0) + 1
+
+    enriched: list[dict[str, object]] = []
+    for hap in haplotypes:
+        item = dict(hap)
+        counts: dict[str, int] = {}
+        for sample in item.get("samples", []):
+            population = pop_map.get(str(sample))
+            if population:
+                counts[population] = counts.get(population, 0) + 1
+        item["populations"] = [
+            {
+                "population": population,
+                "count": count,
+                "total": population_totals[population],
+                "frequency": count / population_totals[population] if population_totals[population] else 0,
+                "frequency_label": f"{count}/{population_totals[population]}",
+            }
+            for population, count in sorted(counts.items())
+        ]
+        enriched.append(item)
+    return enriched
+
+
 def _write_selector_summary_txt(
     selector: Selector,
     summary_row: dict[str, object],
@@ -388,14 +462,10 @@ def _write_selector_summary_txt(
     lines.append("\t".join(["INFO", *info_cells, "Variants: ", str(summary_row["variant_count"])]))
     lines.append("\t".join(["ALLELE", *site_alleles, "Accession", "freq"]))
 
-    accessions_by_hap: dict[str, list[str]] = {}
-    for item in detail_row.get("accessions", []):
-        accessions_by_hap.setdefault(item["hap"], []).append(item["sample"])
-
     for index, item in enumerate(summary_row.get("haplotypes", []), start=1):
-        hap_label = f"H{index:03d}"
-        states = _hap_states(item["hap"], sites, str(summary_row["grouping_method"]))
-        accessions = ";".join(accessions_by_hap.get(item["hap"], []))
+        hap_label = str(item.get("id", f"Hap{index:02d}"))
+        states = _hap_summary_states(item, sites, str(summary_row["grouping_method"]))
+        accessions = ";".join(_hap_samples(item, detail_row))
         lines.append("\t".join([hap_label, *states, accessions, str(item["count"])]))
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -421,7 +491,15 @@ def _write_selector_result_txt(
     hap_label_map = _build_hap_label_map(summary_row)
     for item in detail_row.get("accessions", []):
         hap_label = hap_label_map.get(item["hap"], item["hap"])
-        states = _hap_states(item["hap"], sites, str(summary_row["grouping_method"]))
+        summary_item = next(
+            (hap for hap in summary_row.get("haplotypes", []) if hap.get("hap") == item["hap"]),
+            None,
+        )
+        states = (
+            _hap_summary_states(summary_item, sites, str(summary_row["grouping_method"]))
+            if isinstance(summary_item, dict)
+            else _hap_states(item["hap"], sites, str(summary_row["grouping_method"]))
+        )
         lines.append("\t".join([hap_label, *states, str(item["sample"])]))
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -465,10 +543,15 @@ def _compose_row(
     row: dict[str, object] = {
         "grouping_mode": backend_row["grouping_mode"],
         "grouping_method": backend_row["grouping_method"],
+        "haplotype_label": backend_row.get(
+            "haplotype_label",
+            {"prefix": args.hap_prefix, "pad": args.hap_pad},
+        ),
         "output_mode": backend_row["output_mode"],
         "imputed_ref": backend_row["imputed_ref"],
         "plot_requested": bool(args.plot),
         "selector": selector.payload,
+        "region_label": selector.region,
         "gff3_enabled": bool(args.gff3),
         "max_diff": backend_row["max_diff"],
         "variant_count": backend_row["variant_count"],
@@ -480,11 +563,11 @@ def _compose_row(
         row["plot_backend"] = "python"
 
     if args.output_mode == "summary":
-        row["haplotypes"] = backend_row["haplotypes"]
+        row["haplotypes"] = _with_population_breakdown(list(backend_row["haplotypes"]), args.population_file)
     elif args.output_mode == "detail":
         row["accessions"] = backend_row["accessions"]
     else:  # both
-        row["haplotypes"] = backend_row.get("haplotypes", [])
+        row["haplotypes"] = _with_population_breakdown(list(backend_row.get("haplotypes", [])), args.population_file)
         row["accessions"] = backend_row.get("accessions", [])
 
     if "annotation" in backend_row:
@@ -534,7 +617,8 @@ def _write_plot_artifacts(
 
             detail_row = detail_rows[idx]
             summary_row_data = summary_rows[idx]
-            hap_names = [f"H{i:03d}" for i in range(1, len(summary_row_data.get("haplotypes", [])) + 1)]
+            haplotypes = list(summary_row_data.get("haplotypes", []))
+            hap_names = [str(h.get("id", f"Hap{i:02d}")) for i, h in enumerate(haplotypes, 1)]
             hap_colors = None
             if len(hap_names) > 0:
                 from haplokit._palette import allele_palette
@@ -542,13 +626,10 @@ def _write_plot_artifacts(
 
             # Build sample→haplotype mapping from detail accessions
             sample_hap: dict[str, str] = {}
-            for acc in detail_row.get("accessions", []):
-                hap_idx = 0
-                for hi, h in enumerate(summary_row_data.get("haplotypes", [])):
-                    if h["hap"] == acc["hap"]:
-                        hap_idx = hi
-                        break
-                sample_hap[acc["sample"]] = hap_names[hap_idx] if hap_names else ""
+            for hi, hap in enumerate(haplotypes):
+                label = hap_names[hi] if hi < len(hap_names) else str(hap.get("hap", ""))
+                for sample in _hap_samples(hap, detail_row):
+                    sample_hap[sample] = label
 
             # Read geo file
             geo_samples: list[dict] = []
@@ -579,25 +660,21 @@ def _write_plot_artifacts(
 
             summary_row_data = summary_rows[idx]
             detail_row = detail_rows[idx]
-            hap_names = [f"H{i:03d}" for i in range(1, len(summary_row_data.get("haplotypes", [])) + 1)]
-            hap_strings = [h["hap"] for h in summary_row_data.get("haplotypes", [])]
-            hap_counts = [h["count"] for h in summary_row_data.get("haplotypes", [])]
+            haplotypes = list(summary_row_data.get("haplotypes", []))
+            hap_names = [str(h.get("id", f"Hap{i:02d}")) for i, h in enumerate(haplotypes, 1)]
+            hap_strings = [str(h.get("pattern", h["hap"])) for h in haplotypes]
+            hap_counts = [int(h["count"]) for h in haplotypes]
 
             # Build population composition per haplotype
             pop_data_net = None
             if args.population_file:
                 pop_map = read_popgroup(args.population_file)
                 pop_names = sorted(set(pop_map.values()))
-                accessions_by_hap: dict[str, list[str]] = {}
-                for acc in detail_row.get("accessions", []):
-                    accessions_by_hap.setdefault(acc["hap"], []).append(acc["sample"])
-
-                hap_label_map = {h["hap"]: f"H{i:03d}" for i, h in enumerate(summary_row_data.get("haplotypes", []), 1)}
                 pop_data_net = {}
-                for hap_key, samples in accessions_by_hap.items():
-                    label = hap_label_map.get(hap_key, hap_key)
+                for hi, hap in enumerate(haplotypes):
+                    label = hap_names[hi] if hi < len(hap_names) else str(hap.get("hap", ""))
                     counts_by_pop: dict[str, int] = {}
-                    for s in samples:
+                    for s in _hap_samples(hap, detail_row):
                         p = pop_map.get(s, "Unknown")
                         counts_by_pop[p] = counts_by_pop.get(p, 0) + 1
                     pop_data_net[label] = [(p, counts_by_pop[p]) for p in pop_names if p in counts_by_pop]

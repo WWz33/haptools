@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path:
 from haplokit.cli import main
 
 
-DATA_DIR = ROOT / "inst" / "extdata"
+DATA_DIR = ROOT / "data"
 
 
 @pytest.fixture()
@@ -139,6 +139,8 @@ def test_bed_samples_plot_gff_pipeline_writes_expected_artifacts(tmp_path: Path,
             "-S",
             str(sample_file),
             "--plot",
+            "--plot-format",
+            "pdf",
             "--gff",
             str(DATA_DIR / "annotation.gff"),
             "--output-file",

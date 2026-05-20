@@ -28,6 +28,14 @@ double parse_max_diff(const std::string& value) {
     return parsed;
 }
 
+int parse_hap_pad(const std::string& value) {
+    const int parsed = std::stoi(value);
+    if (parsed < 1) {
+        throw std::runtime_error("hap pad must be a positive integer");
+    }
+    return parsed;
+}
+
 ParsedViewJsonCommand parse_view_json_command(int argc, char** argv) {
     if (argc < 4) {
         throw std::runtime_error(
@@ -96,6 +104,20 @@ ParsedViewJsonCommand parse_view_json_command(int argc, char** argv) {
             parsed.gff3_path = argv[++idx];
             continue;
         }
+        if (arg == "--hap-prefix") {
+            if (idx + 1 >= argc) {
+                throw std::runtime_error("--hap-prefix requires a value");
+            }
+            parsed.options.hap_prefix = argv[++idx];
+            continue;
+        }
+        if (arg == "--hap-pad") {
+            if (idx + 1 >= argc) {
+                throw std::runtime_error("--hap-pad requires a value");
+            }
+            parsed.options.hap_pad = parse_hap_pad(argv[++idx]);
+            continue;
+        }
         throw std::runtime_error("unsupported argument: " + arg);
     }
 
@@ -157,6 +179,20 @@ haplokit::ViewOptions parse_common_view_options(
             if (gff3_path) {
                 *gff3_path = argv[++idx];
             }
+            continue;
+        }
+        if (arg == "--hap-prefix") {
+            if (idx + 1 >= argc) {
+                throw std::runtime_error("--hap-prefix requires a value");
+            }
+            options.hap_prefix = argv[++idx];
+            continue;
+        }
+        if (arg == "--hap-pad") {
+            if (idx + 1 >= argc) {
+                throw std::runtime_error("--hap-pad requires a value");
+            }
+            options.hap_pad = parse_hap_pad(argv[++idx]);
             continue;
         }
         throw std::runtime_error("unsupported argument: " + arg);

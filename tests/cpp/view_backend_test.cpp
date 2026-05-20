@@ -32,6 +32,29 @@ int run() {
         std::cerr << "expected site metadata for summary plot\n";
         return 1;
     }
+    const auto& first_hap = summary.haplotypes.front();
+    if (summary.hap_prefix != "Hap" || summary.hap_pad != 2 || first_hap.id != "Hap01") {
+        std::cerr << "unexpected default haplotype label contract\n";
+        return 1;
+    }
+    if (first_hap.hap.empty() || first_hap.states.empty() || first_hap.samples.empty()) {
+        std::cerr << "expected summary haplotype to include pattern, states, and samples\n";
+        return 1;
+    }
+    if (first_hap.total != summary.sample_count || first_hap.frequency <= 0.0 ||
+        first_hap.frequency_label != std::to_string(first_hap.count) + "/" + std::to_string(summary.sample_count)) {
+        std::cerr << "unexpected summary haplotype count/frequency contract\n";
+        return 1;
+    }
+
+    haplokit::ViewOptions custom_labels = strict_region;
+    custom_labels.hap_prefix = "H";
+    custom_labels.hap_pad = 3;
+    const auto custom_summary = haplokit::build_view_result(region_data, custom_labels);
+    if (custom_summary.haplotype_count <= 0 || custom_summary.haplotypes.front().id != "H001") {
+        std::cerr << "custom haplotype labels were not applied\n";
+        return 1;
+    }
 
     haplokit::ViewOptions strict_site;
     strict_site.by = haplokit::GroupBy::Site;
@@ -64,6 +87,15 @@ int run() {
     }
     if (payload.find("\"haplotypes\"") == std::string::npos) {
         std::cerr << "serialized payload missing haplotypes\n";
+        return 1;
+    }
+    if (payload.find("\"haplotype_label\":{\"pad\":2,\"prefix\":\"Hap\"}") == std::string::npos ||
+        payload.find("\"frequency_label\"") == std::string::npos ||
+        payload.find("\"id\":\"Hap01\"") == std::string::npos ||
+        payload.find("\"pattern\"") == std::string::npos ||
+        payload.find("\"samples\"") == std::string::npos ||
+        payload.find("\"states\"") == std::string::npos) {
+        std::cerr << "serialized payload missing summary contract fields\n";
         return 1;
     }
     if (payload.find("\"sites\"") == std::string::npos) {

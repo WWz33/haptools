@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path:
 from haplokit.cli import build_parser, main
 
 
-DATA_DIR = ROOT / "inst" / "extdata"
+DATA_DIR = ROOT / "data"
 
 
 @pytest.fixture()
@@ -107,10 +107,13 @@ def test_main_default_tsv_writes_hapresult_and_hap_summary(tmp_path: Path, index
     assert summary_rows[2][0] == "INFO"
     assert summary_rows[3][0] == "ALLELE"
     assert summary_rows[3][-2:] == ["Accession", "freq"]
+    assert summary_rows[4][0] == "Hap01"
 
     result_rows = _read_tsv(hapresult)
     assert result_rows[0][0] == "CHR"
     assert result_rows[3][-1] == "Accession"
+    assert result_rows[4][0].startswith("Hap")
+    assert "Hap01" in {row[0] for row in result_rows[4:]}
 
 
 def test_main_bed_writes_selector_scoped_tsv_names(tmp_path: Path, indexed_vcf: Path) -> None:
@@ -148,3 +151,40 @@ def test_main_still_supports_jsonl_when_explicitly_requested(tmp_path: Path, ind
     assert exit_code == 0
     payload = json.loads(out_file.read_text(encoding="utf-8").strip())
     assert payload["grouping_mode"] == "strict-region"
+    assert payload["haplotype_label"] == {"prefix": "Hap", "pad": 2}
+    assert payload["region_label"] == "scaffold_1:4300-5000"
+
+    first_hap = payload["haplotypes"][0]
+    assert first_hap["id"] == "Hap01"
+    assert first_hap["pattern"] == first_hap["hap"]
+    assert first_hap["count"] > 0
+    assert first_hap["total"] == payload["sample_count"]
+    assert first_hap["frequency"] > 0
+    assert first_hap["frequency_label"] == f"{first_hap['count']}/{payload['sample_count']}"
+    assert first_hap["states"]
+    assert first_hap["samples"]
+
+
+def test_main_jsonl_accepts_optional_haplotype_label_override(tmp_path: Path, indexed_vcf: Path) -> None:
+    out_file = tmp_path / "result.jsonl"
+    exit_code = main(
+        [
+            "view",
+            str(indexed_vcf),
+            "-r",
+            "scaffold_1:4300-5000",
+            "--output-format",
+            "jsonl",
+            "--output-file",
+            str(out_file),
+            "--hap-prefix",
+            "H",
+            "--hap-pad",
+            "3",
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(out_file.read_text(encoding="utf-8").strip())
+    assert payload["haplotype_label"] == {"prefix": "H", "pad": 3}
+    assert payload["haplotypes"][0]["id"] == "H001"
