@@ -3,7 +3,7 @@ CXXFLAGS = -O2 -Wall -std=c++17 -pthread
 PREFIX ?= /usr/local
 
 TARGET = gffsub
-SRCS = src/gffsub.cpp src/gff3_parser.cpp src/gff3_filter.cpp src/gff3_output.cpp
+SRCS = src/gffsub.cpp src/gff3_index.cpp src/gff3_parser.cpp src/gff3_filter.cpp src/gff3_output.cpp
 HDRS = src/gff3.hpp
 
 .PHONY: all clean test install uninstall
