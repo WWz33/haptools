@@ -44,10 +44,9 @@ def _max_diff_value(value: str) -> float:
 
 
 def _hap_pad_value(value: str) -> int:
-    try:
-        parsed = int(value)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("hap pad must be a positive integer") from exc
+    if not value.isascii() or not value.isdecimal():
+        raise argparse.ArgumentTypeError("hap pad must be a positive integer")
+    parsed = int(value)
     if parsed < 1:
         raise argparse.ArgumentTypeError("hap pad must be a positive integer")
     return parsed

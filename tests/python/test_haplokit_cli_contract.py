@@ -91,6 +91,13 @@ def test_view_accepts_gff_alias() -> None:
     assert args.gff3 == "anno.gff"
 
 
+def test_view_rejects_invalid_hap_pad_values() -> None:
+    parser = build_parser()
+    for value in ["0", "2x", " 2", "+2"]:
+        with pytest.raises(SystemExit):
+            parser.parse_args(["view", "-r", "chr1:1-10", "--hap-pad", value])
+
+
 def test_main_default_tsv_writes_hapresult_and_hap_summary(tmp_path: Path, indexed_vcf: Path) -> None:
     out_dir = tmp_path / "out"
     exit_code = main(["view", str(indexed_vcf), "-r", "scaffold_1:4300-5000", "--output-file", str(out_dir)])
