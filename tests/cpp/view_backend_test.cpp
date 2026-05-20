@@ -24,6 +24,12 @@ int run() {
         std::cerr << "unexpected gene lookup for missing_gene\n";
         return 1;
     }
+    const auto gene_window = annotator.find_gene_window("test1G0387", 100, 50, true);
+    if (!gene_window.has_value() || gene_window->seqid != "scaffold_1" ||
+        gene_window->start != 4200 || gene_window->end != 7960 || gene_window->strand != '+') {
+        std::cerr << "expected gffsub-backed gene window for test1G0387\n";
+        return 1;
+    }
 
     haplokit::VcfReader reader("data/var.sorted.vcf.gz");
 

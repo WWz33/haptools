@@ -23,6 +23,8 @@ public:
     bool load(const std::string& gff_path);
     GeneAnnotation annotate(const std::string& chrom, int64_t start, int64_t end) const;
     std::optional<GeneAnnotation> find_gene(const std::string& gene_id) const;
+    std::optional<GeneAnnotation> find_gene_window(
+        const std::string& gene_id, int64_t upstream, int64_t downstream, bool strand_aware) const;
 
 private:
     std::optional<gffsub::AnnotationIndex> index_;

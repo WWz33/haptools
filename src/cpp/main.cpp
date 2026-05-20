@@ -49,6 +49,20 @@ int parse_hap_pad(const std::string& value) {
     return parsed;
 }
 
+int64_t parse_nonnegative_window(const std::string& value, const std::string& name) {
+    std::size_t consumed = 0;
+    int64_t parsed = 0;
+    try {
+        parsed = std::stoll(value, &consumed);
+    } catch (const std::exception&) {
+        throw std::runtime_error(name + " must be a non-negative integer");
+    }
+    if (consumed != value.size() || parsed < 0) {
+        throw std::runtime_error(name + " must be a non-negative integer");
+    }
+    return parsed;
+}
+
 ParsedViewJsonCommand parse_view_json_command(int argc, char** argv) {
     if (argc < 4) {
         throw std::runtime_error(
@@ -335,7 +349,9 @@ int run_debug_fetch(int argc, char** argv) {
 
 int run_resolve_gene(int argc, char** argv) {
     if (argc < 4) {
-        throw std::runtime_error("usage: haplokit_cpp resolve-gene <gff3> <gene-id>");
+        throw std::runtime_error(
+            "usage: haplokit_cpp resolve-gene <gff3> <gene-id> "
+            "[--upstream n] [--downstream n] [--strand-aware]");
     }
 
     haplokit::GffAnnotator annotator;
@@ -345,7 +361,33 @@ int run_resolve_gene(int argc, char** argv) {
     }
 
     const std::string gene_id = argv[3];
-    const auto gene = annotator.find_gene(gene_id);
+    int64_t upstream = 0;
+    int64_t downstream = 0;
+    bool strand_aware = false;
+    for (int idx = 4; idx < argc; ++idx) {
+        const std::string arg = argv[idx];
+        if (arg == "--upstream") {
+            if (idx + 1 >= argc) {
+                throw std::runtime_error("--upstream requires a value");
+            }
+            upstream = parse_nonnegative_window(argv[++idx], "upstream");
+            continue;
+        }
+        if (arg == "--downstream") {
+            if (idx + 1 >= argc) {
+                throw std::runtime_error("--downstream requires a value");
+            }
+            downstream = parse_nonnegative_window(argv[++idx], "downstream");
+            continue;
+        }
+        if (arg == "--strand-aware") {
+            strand_aware = true;
+            continue;
+        }
+        throw std::runtime_error("unsupported resolve-gene argument: " + arg);
+    }
+
+    const auto gene = annotator.find_gene_window(gene_id, upstream, downstream, strand_aware);
     if (!gene) {
         throw std::runtime_error("gene ID not found in GFF3: " + gene_id);
     }

@@ -73,4 +73,22 @@ std::optional<GeneAnnotation> GffAnnotator::find_gene(const std::string& gene_id
     return to_gene_annotation(*gene, "gene");
 }
 
+std::optional<GeneAnnotation> GffAnnotator::find_gene_window(
+    const std::string& gene_id, int64_t upstream, int64_t downstream, bool strand_aware) const {
+    if (!index_) {
+        return std::nullopt;
+    }
+    const auto gene = index_->find_gene(gene_id);
+    if (!gene) {
+        return std::nullopt;
+    }
+
+    auto ann = to_gene_annotation(*gene, "gene");
+    const auto region = gffsub::window_region(*gene, upstream, downstream, strand_aware);
+    ann.seqid = region.seqid;
+    ann.start = region.start;
+    ann.end = region.end;
+    return ann;
+}
+
 }  // namespace haplokit

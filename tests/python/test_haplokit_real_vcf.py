@@ -112,6 +112,44 @@ def test_gene_id_selector_resolves_region_from_gff(tmp_path: Path, indexed_vcf: 
     assert row["variant_count"] > 0
 
 
+def test_gene_id_selector_accepts_window_options(tmp_path: Path, indexed_vcf: Path) -> None:
+    out_file = tmp_path / "gene_window.jsonl"
+    exit_code = main(
+        [
+            "view",
+            str(indexed_vcf),
+            "--gene-id",
+            "test1G0387",
+            "--gff",
+            str(DATA_DIR / "annotation.gff"),
+            "--upstream",
+            "100",
+            "--downstream",
+            "50",
+            "--strand-aware",
+            "--output-format",
+            "jsonl",
+            "--output-file",
+            str(out_file),
+        ]
+    )
+
+    assert exit_code == 0
+    row = json.loads(out_file.read_text(encoding="utf-8").strip())
+    assert row["selector"] == {
+        "type": "gene",
+        "chrom": "scaffold_1",
+        "start": 4200,
+        "end": 7960,
+        "gene_id": "test1G0387",
+        "upstream": 100,
+        "downstream": 50,
+        "strand_aware": True,
+    }
+    assert row["region_label"] == "scaffold_1:4200-7960"
+    assert row["variant_count"] > 0
+
+
 def test_site_mode_with_r_chr_pos_behaves_as_one_site(tmp_path: Path, indexed_vcf: Path) -> None:
     out_dir = tmp_path / "out_site"
     exit_code = main(["view", str(indexed_vcf), "-r", "scaffold_1:4300", "--output-file", str(out_dir)])

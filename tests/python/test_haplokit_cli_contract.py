@@ -97,11 +97,22 @@ def test_view_gene_id_selector_requires_gff_and_infers_region_mode() -> None:
     parser = build_parser()
     with pytest.raises(SystemExit):
         parser.parse_args(["view", "--gene-id", "gene1"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["view", "-r", "chr1:1-10", "--upstream", "10"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["view", "-R", "regions.bed", "--downstream", "10"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["view", "--gene-id", "gene1", "--gff", "anno.gff", "--upstream", "-1"])
 
-    args = parser.parse_args(["view", "--gene-id", "gene1", "--gff", "anno.gff"])
+    args = parser.parse_args(
+        ["view", "--gene-id", "gene1", "--gff", "anno.gff", "--upstream", "100", "--downstream", "50", "--strand-aware"]
+    )
     assert args.gene_id == "gene1"
     assert args.gff3 == "anno.gff"
     assert args.by == "region"
+    assert args.upstream == 100
+    assert args.downstream == 50
+    assert args.strand_aware is True
 
 
 def test_view_rejects_invalid_hap_pad_values() -> None:

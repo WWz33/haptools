@@ -52,6 +52,12 @@ def _hap_pad_value(value: str) -> int:
     return parsed
 
 
+def _nonnegative_int_value(value: str) -> int:
+    if not value.isascii() or not value.isdecimal():
+        raise argparse.ArgumentTypeError("value must be a non-negative integer")
+    return int(value)
+
+
 @dataclass(frozen=True)
 class Selector:
     payload: dict[str, object]
@@ -75,6 +81,8 @@ class HaolokitArgumentParser(argparse.ArgumentParser):
             self.error("one of -r/--region, -R/--regions-file, or --gene-id is required")
         if selector_count > 1:
             self.error("-r/--region, -R/--regions-file, and --gene-id are mutually exclusive")
+        if not has_gene_id and (ns.upstream or ns.downstream or ns.strand_aware):
+            self.error("--upstream, --downstream, and --strand-aware are only valid with --gene-id")
         if has_region:
             coords = ns.region.split(":", 1)[1]
             inferred_by = "site" if "-" not in coords else "region"
@@ -109,6 +117,9 @@ def build_parser() -> HaolokitArgumentParser:
     view.add_argument("--by", choices=["auto", "region", "site"], default="auto")
     view.add_argument("--impute", action="store_true")
     view.add_argument("-g", "--gff3", "--gff")
+    view.add_argument("--upstream", type=_nonnegative_int_value, default=0)
+    view.add_argument("--downstream", type=_nonnegative_int_value, default=0)
+    view.add_argument("--strand-aware", action="store_true")
     view.add_argument("--output", dest="output_mode", choices=["summary", "detail"], default="summary")
     view.add_argument("--output-format", choices=["tsv", "jsonl"], default="tsv")
     view.add_argument("--output-file")
@@ -143,10 +154,20 @@ def _selectors_from_args(args) -> list[Selector]:
         return [Selector(payload=payload, region=region)]
 
     if args.gene_id:
-        region = _resolve_gene_region(str(args.gff3), str(args.gene_id))
+        region = _resolve_gene_region(
+            str(args.gff3),
+            str(args.gene_id),
+            int(args.upstream),
+            int(args.downstream),
+            bool(args.strand_aware),
+        )
         payload, region_label = _selector_payload_from_region(region)
         payload["type"] = "gene"
         payload["gene_id"] = args.gene_id
+        if args.upstream or args.downstream or args.strand_aware:
+            payload["upstream"] = args.upstream
+            payload["downstream"] = args.downstream
+            payload["strand_aware"] = args.strand_aware
         return [Selector(payload=payload, region=region_label)]
 
     selectors: list[Selector] = []
@@ -224,8 +245,20 @@ def _cpp_backend_path() -> Path:
     )
 
 
-def _resolve_gene_region(gff3_path: str, gene_id: str) -> str:
+def _resolve_gene_region(
+    gff3_path: str,
+    gene_id: str,
+    upstream: int = 0,
+    downstream: int = 0,
+    strand_aware: bool = False,
+) -> str:
     cmd = [str(_cpp_backend_path()), "resolve-gene", gff3_path, gene_id]
+    if upstream:
+        cmd.extend(["--upstream", str(upstream)])
+    if downstream:
+        cmd.extend(["--downstream", str(downstream)])
+    if strand_aware:
+        cmd.append("--strand-aware")
     completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
     _check_backend_result(completed)
     region = completed.stdout.strip()
