@@ -95,6 +95,73 @@ def test_view_accepts_gff_alias() -> None:
     assert args.gff3 == "anno.gff"
 
 
+def test_view_accepts_short_option_aliases() -> None:
+    parser = build_parser()
+    args = parser.parse_args(
+        [
+            "view",
+            "input.vcf.gz",
+            "-G",
+            "gene1",
+            "-g",
+            "anno.gff",
+            "-u",
+            "100",
+            "-d",
+            "50",
+            "-a",
+            "-S",
+            "samples.txt",
+            "-b",
+            "region",
+            "-i",
+            "-o",
+            "detail",
+            "-f",
+            "jsonl",
+            "-O",
+            "out.jsonl",
+            "-P",
+            "-F",
+            "pdf",
+            "-p",
+            "pop.tsv",
+            "-m",
+            "0.2",
+            "-e",
+            "geo.tsv",
+            "-n",
+            "-N",
+            "msn",
+            "-H",
+            "H",
+            "-D",
+            "3",
+        ]
+    )
+
+    assert args.gene_id == "gene1"
+    assert args.gff3 == "anno.gff"
+    assert args.upstream == 100
+    assert args.downstream == 50
+    assert args.strand_aware is True
+    assert args.samples_file == "samples.txt"
+    assert args.by == "region"
+    assert args.impute is True
+    assert args.output_mode == "detail"
+    assert args.output_format == "jsonl"
+    assert args.output_file == "out.jsonl"
+    assert args.plot is True
+    assert args.plot_format == "pdf"
+    assert args.population_file == "pop.tsv"
+    assert args.max_diff == 0.2
+    assert args.geo_file == "geo.tsv"
+    assert args.network is True
+    assert args.network_method == "msn"
+    assert args.hap_prefix == "H"
+    assert args.hap_pad == 3
+
+
 def test_view_gene_id_selector_requires_gff_and_infers_region_mode() -> None:
     parser = build_parser()
     with pytest.raises(SystemExit):
@@ -123,6 +190,12 @@ def test_view_gene_id_selector_requires_gff_and_infers_region_mode() -> None:
     assert list_args.gff3 == "anno.gff"
     assert list_args.by == "region"
     assert list_args.upstream == 25
+
+    short_list_args = parser.parse_args(["view", "-l", "genes.txt", "-g", "anno.gff", "-u", "25"])
+    assert short_list_args.gene_list == "genes.txt"
+    assert short_list_args.gff3 == "anno.gff"
+    assert short_list_args.by == "region"
+    assert short_list_args.upstream == 25
 
 
 def test_view_rejects_invalid_hap_pad_values() -> None:
