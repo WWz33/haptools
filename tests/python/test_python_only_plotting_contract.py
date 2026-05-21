@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from haplokit.plot import plot_hap_table, read_hap_summary_tsv
+from haplokit.plot import plot_hap_distribution, plot_hap_table, read_hap_summary_tsv
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -40,3 +40,24 @@ def test_python_plotter_renders_pdf_and_svg_from_hap_summary_tsv(tmp_path: Path)
     assert pdf_rendered.suffix == ".pdf"
     assert svg_rendered.exists()
     assert svg_rendered.suffix == ".svg"
+
+
+def test_distribution_plot_accepts_map_facecolor(tmp_path: Path) -> None:
+    samples = [
+        {"lon": -99.13, "lat": 19.43, "hap": "Hap01"},
+        {"lon": 116.40, "lat": 39.90, "hap": "Hap02"},
+        {"lon": 2.35, "lat": 48.86, "hap": "Hap01"},
+    ]
+    out = tmp_path / "global_hap_map.pdf"
+
+    rendered = plot_hap_distribution(
+        samples,
+        ["Hap01", "Hap02"],
+        out,
+        database="none",
+        map_facecolor="#e6f2ff",
+        fmt="pdf",
+    )
+
+    assert rendered.exists()
+    assert rendered.suffix == ".pdf"

@@ -130,6 +130,8 @@ def test_view_accepts_short_option_aliases() -> None:
             "0.2",
             "-e",
             "geo.tsv",
+            "--map-facecolor",
+            "#e6f2ff",
             "-n",
             "-N",
             "msn",
@@ -156,6 +158,7 @@ def test_view_accepts_short_option_aliases() -> None:
     assert args.population_file == "pop.tsv"
     assert args.max_diff == 0.2
     assert args.geo_file == "geo.tsv"
+    assert args.map_facecolor == "#e6f2ff"
     assert args.network is True
     assert args.network_method == "msn"
     assert args.hap_prefix == "H"

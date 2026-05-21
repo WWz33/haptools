@@ -51,6 +51,7 @@ def plot_hap_distribution(
     hap_colors: list[str] | None = None,
     database: str = "china",
     geo_source: str | None = None,
+    map_facecolor: str = "#f5f5f0",
     symbol_lim: tuple[float, float] = (0.3, 1.2),
     show_labels: bool = False,
     label_font_size: float = 5.5,
@@ -72,6 +73,7 @@ def plot_hap_distribution(
         hap_colors: Colors per haplotype (auto from PALETTE if None).
         database: Map source key ('china') or 'none' for no map.
         geo_source: Direct URL/path to GeoJSON (overrides database).
+        map_facecolor: Fill color for base map polygons.
         symbol_lim: (min, max) radius scaling range.
         show_labels: Show total-count labels at each location.
         label_font_size: Font size for location labels.
@@ -129,7 +131,7 @@ def plot_hap_distribution(
         if map_patches:
             pc = PatchCollection(
                 map_patches,
-                facecolor="#f5f5f0", edgecolor="#9e9e9e",
+                facecolor=map_facecolor, edgecolor="#9e9e9e",
                 linewidth=0.3, zorder=1,
             )
             ax.add_collection(pc)

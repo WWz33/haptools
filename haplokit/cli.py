@@ -130,6 +130,7 @@ def build_parser() -> HaolokitArgumentParser:
     view.add_argument("-p", "--population", dest="population_file")
     view.add_argument("-m", "--max-diff", type=_max_diff_value)
     view.add_argument("-e", "--geo", dest="geo_file")
+    view.add_argument("--map-facecolor", default="#f5f5f0")
     view.add_argument("-n", "--network", action="store_true")
     view.add_argument("-N", "--network-method", choices=["tcs", "msn", "mjn"], default="tcs")
     view.add_argument("-H", "--hap-prefix", default="Hap")
@@ -642,6 +643,7 @@ def _write_plot_artifacts(
                 artifact_paths["geo_file"] = str(plot_hap_distribution(
                     geo_samples, hap_names, geo_path,
                     hap_colors=hap_colors, title=gene_name,
+                    map_facecolor=args.map_facecolor,
                     fmt=args.plot_format,
                 ))
 
