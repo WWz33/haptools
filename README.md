@@ -102,25 +102,34 @@ Adds population columns to the table and figure.
 Map haplotype composition at sampling locations.
 
 ```bash
-haplokit view in.vcf.gz -r chr1:1000-2000 -p popgroup.txt --geo sample_geo.txt --plot --output-file out
+haplokit view in.vcf.gz -r chr1:1000-2000 -p popgroup.txt --geo data/sample_china_geo.txt --plot --output-file out
 ```
 
-`sample_geo.txt` (tab-separated: `ID<TAB>longitude<TAB>latitude`):
+`sample_china_geo.txt` and `sample_world_geo.txt` are tab-separated coordinate examples (`ID<TAB>longitude<TAB>latitude<TAB>Hap`). The `Hap` column is included for standalone plotting examples; CLI map plotting derives each sample's haplotype from the VCF result.
 
 ```text
-ID	longitude	latitude
-C1	116.40	39.90
-C4	121.47	31.23
+ID	longitude	latitude	Hap
+C1	116.40	39.90	H001
+C2	116.40	39.90	H002
+C3	116.40	39.90	H001
 ```
 
 <img src="plotmap.png" alt="Haplotype geographic distribution" width="600">
 
+World example resources are included under `data/`:
+
+- `sample_world_geo.txt` keeps the same `ID/Hap` composition as `sample_china_geo.txt`, but replaces coordinates with global sampling locations.
+- `world_countries.shp`, `world_countries.shx`, and `world_countries.dbf` provide the example world map shapefile.
+- `sample_world_geo_map.png` is the generated world map example.
+
+<img src="data/sample_world_geo_map.png" alt="World haplotype geographic distribution" width="600">
+
 Figure components:
 
 - **Pie charts**: haplotype composition per location; size ∝ √(sample count)
-- **Color legend** (top-left): haplotype color key
-- **Bubble-size legend** (top-right): ggplot2-style graduated circles, showing the sample-count scale
-- **Base map**: GeoJSON province boundaries (China)
+- **Color legend**: haplotype color key
+- **Bubble-size legend**: ggplot2-style graduated circles, showing the sample-count scale
+- **Base map**: GeoJSON province boundaries (China) or the bundled world shapefile example
 
 ### 6. Haplotype network — popart-style
 

@@ -102,25 +102,34 @@ C13	landrace
 在采样地点上映射单倍型组成。
 
 ```bash
-haplokit view in.vcf.gz -r chr1:1000-2000 -p popgroup.txt --geo sample_geo.txt --plot --output-file out
+haplokit view in.vcf.gz -r chr1:1000-2000 -p popgroup.txt --geo data/sample_china_geo.txt --plot --output-file out
 ```
 
-`sample_geo.txt`（Tab 分隔：`ID<TAB>longitude<TAB>latitude`）：
+`sample_china_geo.txt` 和 `sample_world_geo.txt` 是 Tab 分隔的坐标示例（`ID<TAB>longitude<TAB>latitude<TAB>Hap`）。`Hap` 列用于独立绘图示例；CLI 地图绘图会从 VCF 结果中推断每个样本的单倍型。
 
 ```text
-ID	longitude	latitude
-C1	116.40	39.90
-C4	121.47	31.23
+ID	longitude	latitude	Hap
+C1	116.40	39.90	H001
+C2	116.40	39.90	H002
+C3	116.40	39.90	H001
 ```
 
 <img src="plotmap.png" alt="单倍型地理分布图" width="600">
 
+`data/` 下包含世界地图示例资源：
+
+- `sample_world_geo.txt` 与 `sample_china_geo.txt` 保持相同的 `ID/Hap` 组成，只把坐标替换为全球采样地点。
+- `world_countries.shp`、`world_countries.shx` 和 `world_countries.dbf` 提供示例世界地图 shapefile。
+- `sample_world_geo_map.png` 是生成好的世界地图示例图。
+
+<img src="data/sample_world_geo_map.png" alt="世界单倍型地理分布图" width="600">
+
 图表组件：
 
 - **饼图**：每位置单倍型组成；大小 ∝ √(样本数)
-- **颜色图例**（左上）：单倍型颜色键
-- **气泡大小图例**（右上）：ggplot2 风格分级圆圈，展示样本数刻度
-- **底图**：GeoJSON 省界多边形（中国）
+- **颜色图例**：单倍型颜色键
+- **气泡大小图例**：ggplot2 风格分级圆圈，展示样本数刻度
+- **底图**：GeoJSON 省界多边形（中国）或随附的世界地图 shapefile 示例
 
 ### 6. 单倍型网络 — popart 风格
 
